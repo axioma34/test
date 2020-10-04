@@ -1,8 +1,8 @@
 <?php
-require_once("../test_project/src/CommissionComputingService.php");
-require_once("../test_project/src/Entities/Rate.php");
-require_once("../test_project/src/Entities/BinCountry.php");
-require_once("../test_project/src/Entities/Transaction.php");
+require_once("src/CommissionComputingService.php");
+require_once("src/Entities/Rate.php");
+require_once("src/Entities/BinCountry.php");
+require_once("src/Entities/Transaction.php");
 
 $dataString = file_get_contents($argv[1]);
 
