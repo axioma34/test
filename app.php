@@ -27,7 +27,6 @@ foreach ($transactions as $transaction) {
     $transaction = json_decode($transaction, true);
 
     if (!validateTransaction($transaction)) {
-        echo "Wrong transaction format \n";
         continue;
     }
 
