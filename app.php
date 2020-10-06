@@ -1,8 +1,11 @@
 <?php
-require_once("src/CommissionComputingService.php");
-require_once("src/Entities/Rate.php");
-require_once("src/Entities/BinCountry.php");
-require_once("src/Entities/Transaction.php");
+require_once 'vendor/autoload.php';
+
+use App\RateLoader;
+use App\BinLoader;
+use App\CommissionComputingService;
+use GuzzleHttp\Client;
+use App\Entities\Transaction;
 
 $dataString = file_get_contents($argv[1]);
 
@@ -10,78 +13,45 @@ if (!$dataString) {
     throw new \Exception("file is empty");
 }
 
+$client = new Client();
 $transactions = explode("\n", $dataString);
 $ratesData = null;
+$rateLoader = new RateLoader($client);
+$binLoader = new Binloader($client);
+$rate = $rateLoader->getRatesDate();
 
-try {
-    $ratesData = file_get_contents('https://api.exchangeratesapi.io/latest');
-} catch (\Exception $e) {
-    echo $e->getMessage();
-}
-
-
-$rates = json_decode($ratesData, true);
-
-if (!$rates || $rates && !array_key_exists('rates', $rates)) {
-    throw new \Exception("Could not get rates!");
-}
-
-$commissionCompute = new \App\CommissionComputingService();
-$commissionCompute->setRate(getRate($rates));
+$commissionCompute = new CommissionComputingService();
+$commissionCompute->setRate($rate);
 
 foreach ($transactions as $transaction) {
     $transaction = json_decode($transaction, true);
-    if (!validateTransaction($transaction)) continue;
-    $transactionEntity = getTransaction($transaction);
-    try {
-        $binResults = file_get_contents('https://lookup.binlist.net/' . $transactionEntity->getBin());
-    } catch (\Exception $e) {
-        echo $e->getMessage();
+
+    if (!validateTransaction($transaction)) {
+        echo "Wrong transaction format \n";
+        continue;
     }
 
-    $binResults = json_decode($binResults, true);
-    if (!validateBin($binResults)) continue;
-    $commissionCompute->setBinCountry(getBinCountry($binResults));
+    $transactionEntity = getTransaction($transaction);
+    $binCountry = $binLoader->getBinDate($transactionEntity->getBin());
+    $commissionCompute->setBinCountry($binCountry);
     echo $commissionCompute->compute($transactionEntity) . "\n";
 }
 
 function validateTransaction(?array $row): bool
 {
-    if (!$row || !array_key_exists('amount', $row) || !array_key_exists('currency', $row)) {
+    if (!$row || !array_key_exists('amount', $row) || !array_key_exists('currency', $row)
+        || !array_key_exists('bin', $row)) {
         return false;
     }
     return true;
 }
 
-function validateBin(?array $arr)
+function getTransaction(array $transaction): Transaction
 {
-    if (!$arr || !array_key_exists('country', $arr) || !array_key_exists('alpha2', $arr['country'])) {
-        return false;
-    }
-    return true;
-}
-
-function getTransaction(array $transaction): \App\Entities\Transaction
-{
-    $transactionEntity = new \App\Entities\Transaction();
+    $transactionEntity = new Transaction();
     $transactionEntity->setAmount($transaction['amount']);
     $transactionEntity->setCurrency($transaction['currency']);
     $transactionEntity->setBin($transaction['bin']);
     return $transactionEntity;
 }
 
-function getRate(array $rateArr): \App\Entities\Rate
-{
-    $rate = new \App\Entities\Rate();
-    $rate->setDate(new DateTime($rateArr['date']));
-    $rate->setBaseCurrency($rateArr['base']);
-    $rate->setRates($rateArr['rates']);
-    return $rate;
-}
-
-function getBinCountry(array $binResults): \App\Entities\BinCountry
-{
-    $binCountry = new \App\Entities\BinCountry();
-    $binCountry->setAlpha2($binResults['country']['alpha2']);
-    return $binCountry;
-}
